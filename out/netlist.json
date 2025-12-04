@@ -1,0 +1,26 @@
+{
+  "top": "simple_alu",
+  "instances": [],
+  "nets": [
+    {
+      "name": "a",
+      "pins": []
+    },
+    {
+      "name": "b",
+      "pins": []
+    },
+    {
+      "name": "op",
+      "pins": []
+    },
+    {
+      "name": "y",
+      "pins": []
+    }
+  ],
+  "stats": {
+    "instances": 0,
+    "nets": 4
+  }
+}

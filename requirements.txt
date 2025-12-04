@@ -1,0 +1,7 @@
+pyverilog
+networkx
+matplotlib
+fastapi
+uvicorn[standard]
+python-multipart
+

@@ -1,0 +1,5 @@
+# inst_name  x  y  width  height
+u_rom 12 10 4 5
+u_rom2 9 18 4 5
+u_add 16 17 3 4
+u_xor 20 14 3 4
