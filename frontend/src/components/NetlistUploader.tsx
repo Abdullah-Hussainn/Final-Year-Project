@@ -134,6 +134,9 @@ export default function NetlistUploader() {
       const apiBase = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000'
       const apiUrl = `${apiBase}/api/netlist`
       
+      console.log(`[NetlistUploader] Making request to: ${apiUrl}`)
+      console.log(`[NetlistUploader] Files: ${files.map(f => f.name).join(', ')}`)
+      
       const response = await fetchWithTimeout(
         apiUrl,
         {
@@ -174,7 +177,20 @@ export default function NetlistUploader() {
       showToast('Netlist parsed successfully!', 'success')
       setActiveTab('instances')
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'An error occurred'
+      let errorMsg = 'An error occurred'
+      if (err instanceof Error) {
+        errorMsg = err.message
+        // Log full error for debugging
+        console.error('Parse error:', err)
+        // Check for specific error types
+        if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+          errorMsg = `Failed to connect to backend at ${apiBase}. Make sure the backend is running on port 8000.`
+        } else if (err.message.includes('CORS')) {
+          errorMsg = 'CORS error: Backend may not be allowing requests from this origin.'
+        } else if (err.message.includes('timeout')) {
+          errorMsg = 'Request timed out. The backend may be taking too long to respond.'
+        }
+      }
       setError(errorMsg)
       showToast(errorMsg.substring(0, 100), 'error')
       setProgress('Error occurred')

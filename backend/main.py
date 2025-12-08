@@ -21,16 +21,11 @@ from netlist_parser import build_netlist_graph, graph_to_json
 
 app = FastAPI(title="Netlist Builder API")
 
-# Enable CORS for frontend
+# Enable CORS for frontend - allow all origins for development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:5173",  # Vite default port
-        "http://127.0.0.1:5173",
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],  # Allow all origins for development
+    allow_credentials=False,  # Must be False when allow_origins=["*"]
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"],
@@ -87,10 +82,42 @@ async def parse_netlist(
             # Save to current working directory (backend folder) - like notebook
             temp_path = backend_dir / file.filename
             logger.info(f"Saving file: {temp_path}")
+            
+            # Read file content
+            content = await file.read()
+            if not content:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"File {file.filename} is empty"
+                )
+            
+            # Write file content
             with open(temp_path, "wb") as f:
-                content = await file.read()
                 f.write(content)
-            logger.info(f"File saved: {temp_path.exists()}, size: {temp_path.stat().st_size} bytes")
+            
+            # Verify file was saved correctly
+            if not temp_path.exists():
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to save file: {file.filename}"
+                )
+            
+            file_size = temp_path.stat().st_size
+            if file_size == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"File {file.filename} was saved but is empty (0 bytes)"
+                )
+            
+            # Verify file content is readable
+            try:
+                with open(temp_path, "r", encoding="utf-8") as f:
+                    first_line = f.readline()
+                    logger.info(f"File {file.filename} first line: {first_line[:50] if first_line else '(empty)'}")
+            except Exception as e:
+                logger.warning(f"Could not read file {file.filename} as text: {e}")
+            
+            logger.info(f"File saved successfully: {temp_path}, size: {file_size} bytes")
             # Use relative path like notebook does (from current working directory)
             temp_files.append(file.filename)
         

@@ -4,6 +4,8 @@ This module contains the exact parsing logic from the notebook.
 """
 import os
 import logging
+import glob
+import shutil
 import networkx as nx
 from pyverilog.vparser.parser import parse
 from pyverilog.vparser.ast import (
@@ -68,18 +70,37 @@ def build_netlist_graph(verilog_files, top=None, treat_top_ios_as_nets=True):
     normalized_files = []
     for f in verilog_files:
         # First check if file exists as-is (relative to CWD)
+        file_path = None
         if os.path.exists(f):
-            normalized_files.append(f)
-            logger.info(f"File found (relative): {f} (abs: {os.path.abspath(f)})")
+            file_path = f
+            abs_path = os.path.abspath(f)
+            logger.info(f"File found (relative): {f} (abs: {abs_path})")
         else:
             # Try absolute path
             abs_path = os.path.abspath(f)
             if os.path.exists(abs_path):
-                # If absolute path works, use it
-                normalized_files.append(abs_path)
+                file_path = abs_path
                 logger.info(f"File found (absolute): {abs_path}")
             else:
                 raise FileNotFoundError(f"Verilog file not found: {f} (checked: {f} and {abs_path}, CWD: {current_dir})")
+        
+        # Verify file is not empty and has content
+        if file_path:
+            file_size = os.path.getsize(file_path)
+            if file_size == 0:
+                raise ValueError(f"Verilog file is empty: {file_path}")
+            
+            # Try to read first few bytes to verify it's readable
+            try:
+                with open(file_path, 'rb') as test_file:
+                    first_bytes = test_file.read(100)
+                    if not first_bytes:
+                        raise ValueError(f"Verilog file appears to be empty or unreadable: {file_path}")
+                    logger.info(f"File {file_path} verified: {file_size} bytes, starts with: {first_bytes[:50]}")
+            except Exception as e:
+                raise ValueError(f"Cannot read Verilog file {file_path}: {e}")
+            
+            normalized_files.append(file_path)
     
     logger.info("Calling PyVerilog parse()...")
     logger.info(f"Working directory before parse: {os.getcwd()}")
@@ -89,14 +110,64 @@ def build_netlist_graph(verilog_files, top=None, treat_top_ios_as_nets=True):
     if not os.access(current_dir, os.W_OK):
         raise PermissionError(f"Current directory is not writable: {current_dir}")
     
-    # Clean up any existing preprocess.output from previous runs
-    preprocess_file = os.path.join(current_dir, "preprocess.output")
+    # Aggressive cleanup of PyVerilog temp files before parsing
+    # This prevents parsing issues from leftover temp files
+    temp_patterns = [
+        "preprocess.output",
+        "preprocess.output.*",
+        "parser.out",
+        "parsetab.py",
+        "parsetab.pyc",
+        "__pycache__/parsetab.*",
+    ]
+    
+    logger.info("Cleaning up PyVerilog temp files...")
+    for pattern in temp_patterns:
+        try:
+            # Handle patterns with wildcards
+            if "*" in pattern:
+                matches = glob.glob(os.path.join(current_dir, pattern))
+                for match in matches:
+                    try:
+                        if os.path.isfile(match):
+                            os.remove(match)
+                            logger.info(f"Removed temp file: {match}")
+                        elif os.path.isdir(match):
+                            shutil.rmtree(match)
+                            logger.info(f"Removed temp directory: {match}")
+                    except Exception as e:
+                        logger.warning(f"Could not remove {match}: {e}")
+            else:
+                # Handle specific files
+                temp_path = os.path.join(current_dir, pattern)
+                if os.path.exists(temp_path):
+                    try:
+                        if os.path.isfile(temp_path):
+                            os.remove(temp_path)
+                            logger.info(f"Removed temp file: {temp_path}")
+                        elif os.path.isdir(temp_path):
+                            shutil.rmtree(temp_path)
+                            logger.info(f"Removed temp directory: {temp_path}")
+                    except Exception as e:
+                        logger.warning(f"Could not remove {temp_path}: {e}")
+        except Exception as e:
+            logger.warning(f"Error cleaning up pattern {pattern}: {e}")
+    
+    # Also clean up any __pycache__ directories that might contain parsetab files
     try:
-        if os.path.exists(preprocess_file):
-            os.remove(preprocess_file)
-            logger.info(f"Removed existing preprocess.output: {preprocess_file}")
+        pycache_dir = os.path.join(current_dir, "__pycache__")
+        if os.path.exists(pycache_dir):
+            for item in os.listdir(pycache_dir):
+                if "parsetab" in item:
+                    item_path = os.path.join(pycache_dir, item)
+                    try:
+                        if os.path.isfile(item_path):
+                            os.remove(item_path)
+                            logger.info(f"Removed cached file: {item_path}")
+                    except Exception as e:
+                        logger.warning(f"Could not remove {item_path}: {e}")
     except Exception as e:
-        logger.warning(f"Could not remove existing preprocess.output: {e}")
+        logger.warning(f"Error cleaning up __pycache__: {e}")
     
     # Ensure we can write to the directory
     try:
@@ -110,19 +181,63 @@ def build_netlist_graph(verilog_files, top=None, treat_top_ios_as_nets=True):
     
     # Create empty preprocess.output file - PyVerilog may try to read it before creating it
     # This is a workaround for PyVerilog's preprocessor behavior
+    preprocess_file = os.path.join(current_dir, "preprocess.output")
     try:
+        # Ensure file doesn't exist first (should have been cleaned up, but double-check)
+        if os.path.exists(preprocess_file):
+            try:
+                os.remove(preprocess_file)
+            except:
+                pass
+        # Create empty file
         with open(preprocess_file, 'w') as f:
             pass  # Create empty file
+        # Verify file was created
+        if not os.path.exists(preprocess_file):
+            raise IOError(f"Failed to create preprocess.output at {preprocess_file}")
         logger.info(f"Created empty preprocess.output: {preprocess_file}")
     except Exception as e:
-        logger.warning(f"Could not create preprocess.output: {e}")
+        logger.error(f"Could not create preprocess.output: {e}")
+        raise IOError(f"Failed to create preprocess.output file: {e}")
     
     # Match notebook exactly: ast, directives = parse(verilog_files)
     # PyVerilog will create preprocess.output in the current working directory
     try:
+        # Log file contents before parsing for debugging
+        for f in normalized_files:
+            try:
+                with open(f, 'r', encoding='utf-8', errors='ignore') as test_file:
+                    content_preview = test_file.read(200)
+                    logger.info(f"File {f} content preview (first 200 chars): {repr(content_preview)}")
+                    test_file.seek(0)
+                    line_count = sum(1 for _ in test_file)
+                    logger.info(f"File {f} has {line_count} lines")
+            except Exception as read_err:
+                logger.warning(f"Could not preview file {f}: {read_err}")
+        
+        logger.info(f"Calling PyVerilog parse() with {len(normalized_files)} file(s)")
         ast, directives = parse(normalized_files)
+        logger.info("PyVerilog parse() completed successfully")
     except Exception as e:
-        logger.error(f"PyVerilog parse() failed: {e}", exc_info=True)
+        error_msg = str(e)
+        logger.error(f"PyVerilog parse() failed: {error_msg}", exc_info=True)
+        
+        # Provide more context for "at end of input" errors
+        if "at end of input" in error_msg.lower() or "none" in error_msg.lower():
+            logger.error("This error usually means PyVerilog received an empty or incomplete file.")
+            for f in normalized_files:
+                if os.path.exists(f):
+                    file_size = os.path.getsize(f)
+                    logger.error(f"File {f}: exists={True}, size={file_size} bytes")
+                    try:
+                        with open(f, 'r', encoding='utf-8', errors='ignore') as test_file:
+                            first_line = test_file.readline()
+                            logger.error(f"File {f} first line: {repr(first_line[:100])}")
+                    except Exception as read_err:
+                        logger.error(f"Could not read file {f}: {read_err}")
+                else:
+                    logger.error(f"File {f}: DOES NOT EXIST")
+        
         # Check if preprocess.output exists and provide more context
         preprocess_file = os.path.join(current_dir, "preprocess.output")
         logger.error(f"preprocess.output path: {preprocess_file}")

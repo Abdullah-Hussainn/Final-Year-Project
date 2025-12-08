@@ -1,26 +1,101 @@
 {
-  "top": "simple_alu",
-  "instances": [],
+  "top": "chip_top",
+  "instances": [
+    {
+      "name": "u_rom_a",
+      "type": "lookup_table_a"
+    },
+    {
+      "name": "u_rom_b",
+      "type": "lookup_table_b"
+    },
+    {
+      "name": "u_alu",
+      "type": "combinational_alu"
+    }
+  ],
   "nets": [
     {
-      "name": "a",
+      "name": "clk",
       "pins": []
     },
     {
-      "name": "b",
+      "name": "rst_n",
       "pins": []
     },
     {
-      "name": "op",
+      "name": "gpio_a",
       "pins": []
     },
     {
-      "name": "y",
+      "name": "gpio_b",
       "pins": []
+    },
+    {
+      "name": "4'h0",
+      "pins": [
+        {
+          "inst": "u_rom_a",
+          "pin": "addr"
+        }
+      ]
+    },
+    {
+      "name": "rom_a_data",
+      "pins": [
+        {
+          "inst": "u_rom_a",
+          "pin": "data"
+        },
+        {
+          "inst": "u_alu",
+          "pin": "a"
+        }
+      ]
+    },
+    {
+      "name": "4'h1",
+      "pins": [
+        {
+          "inst": "u_rom_b",
+          "pin": "addr"
+        }
+      ]
+    },
+    {
+      "name": "rom_b_data",
+      "pins": [
+        {
+          "inst": "u_rom_b",
+          "pin": "data"
+        },
+        {
+          "inst": "u_alu",
+          "pin": "b"
+        }
+      ]
+    },
+    {
+      "name": "2'b00",
+      "pins": [
+        {
+          "inst": "u_alu",
+          "pin": "op"
+        }
+      ]
+    },
+    {
+      "name": "alu_result",
+      "pins": [
+        {
+          "inst": "u_alu",
+          "pin": "y"
+        }
+      ]
     }
   ],
   "stats": {
-    "instances": 0,
-    "nets": 4
+    "instances": 3,
+    "nets": 10
   }
 }
