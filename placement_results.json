@@ -21,6 +21,94 @@
       3
     ]
   },
+  "instances": [
+    {
+      "name": "u_rom",
+      "type": "simple_rom"
+    },
+    {
+      "name": "u_rom2",
+      "type": "simple_rom"
+    },
+    {
+      "name": "u_add",
+      "type": "simple_alu"
+    },
+    {
+      "name": "u_xor",
+      "type": "simple_alu"
+    }
+  ],
+  "nets": {
+    "clk": [],
+    "rst_n": [],
+    "gpio_a": [],
+    "gpio_b": [],
+    "1'b0": [
+      {
+        "inst": "u_rom",
+        "pin": "addr"
+      }
+    ],
+    "A": [
+      {
+        "inst": "u_rom",
+        "pin": "data"
+      },
+      {
+        "inst": "u_add",
+        "pin": "a"
+      },
+      {
+        "inst": "u_xor",
+        "pin": "a"
+      }
+    ],
+    "1'b1": [
+      {
+        "inst": "u_rom2",
+        "pin": "addr"
+      }
+    ],
+    "B": [
+      {
+        "inst": "u_rom2",
+        "pin": "data"
+      },
+      {
+        "inst": "u_add",
+        "pin": "b"
+      },
+      {
+        "inst": "u_xor",
+        "pin": "b"
+      }
+    ],
+    "2'b00": [
+      {
+        "inst": "u_add",
+        "pin": "op"
+      }
+    ],
+    "Y_add": [
+      {
+        "inst": "u_add",
+        "pin": "y"
+      }
+    ],
+    "2'b10": [
+      {
+        "inst": "u_xor",
+        "pin": "op"
+      }
+    ],
+    "Y_xor": [
+      {
+        "inst": "u_xor",
+        "pin": "y"
+      }
+    ]
+  },
   "placements_random": {
     "u_rom": [
       17,
@@ -81,7 +169,37 @@
     "greedy": {
       "hpwl": 19.0,
       "congestion_top10": 0.7017543859649122
+    },
+    "ppo": {
+      "hpwl": 20.0,
+      "congestion_top10": 0.5614035087719298
     }
   },
-  "timestamp": "2025-11-30 15:27:09"
+  "timestamp": "2026-02-24 00:42:00",
+  "placements_ppo": {
+    "u_rom": [
+      11,
+      7,
+      5,
+      4
+    ],
+    "u_rom2": [
+      8,
+      13,
+      5,
+      4
+    ],
+    "u_add": [
+      13,
+      11,
+      4,
+      3
+    ],
+    "u_xor": [
+      7,
+      9,
+      4,
+      3
+    ]
+  }
 }

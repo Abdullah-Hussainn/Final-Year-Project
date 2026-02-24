@@ -1,0 +1,90 @@
+VERSION 5.8 ;
+NAMESCASESENSITIVE ON ;
+
+UNITS
+  DATABASE MICRONS 100 ;
+END UNITS
+
+MANUFACTURINGGRID 1 ;
+
+SITE CORE
+  CLASS CORE ;
+  SIZE 1.000 BY 1.000 ;
+END CORE
+
+LAYER M1
+  TYPE ROUTING ;
+  DIRECTION HORIZONTAL ;
+  PITCH 100 ;
+  WIDTH 100 ;
+END M1
+
+MACRO simple_rom
+  CLASS BLOCK ;
+  FOREIGN simple_rom 0.000 0.000 ;
+  ORIGIN 0.000 0.000 ;
+  SIZE 40.000 BY 40.000 ;
+
+  PIN addr
+    DIRECTION INPUT ;
+    USE SIGNAL ;
+    PORT
+      LAYER M1 ;
+      RECT 0.000 8.000 1.000 9.000 ;
+    END
+  END addr
+
+  PIN data
+    DIRECTION OUTPUT ;
+    USE SIGNAL ;
+    PORT
+      LAYER M1 ;
+      RECT 39.000 8.000 40.000 9.000 ;
+    END
+  END data
+END simple_rom
+
+MACRO simple_alu
+  CLASS BLOCK ;
+  FOREIGN simple_alu 0.000 0.000 ;
+  ORIGIN 0.000 0.000 ;
+  SIZE 40.000 BY 40.000 ;
+
+  PIN a
+    DIRECTION INPUT ;
+    USE SIGNAL ;
+    PORT
+      LAYER M1 ;
+      RECT 0.000 8.000 1.000 9.000 ;
+    END
+  END a
+
+  PIN b
+    DIRECTION INPUT ;
+    USE SIGNAL ;
+    PORT
+      LAYER M1 ;
+      RECT 39.000 8.000 40.000 9.000 ;
+    END
+  END b
+
+  PIN op
+    DIRECTION INPUT ;
+    USE SIGNAL ;
+    PORT
+      LAYER M1 ;
+      RECT 8.000 0.000 9.000 1.000 ;
+    END
+  END op
+
+  PIN y
+    DIRECTION OUTPUT ;
+    USE SIGNAL ;
+    PORT
+      LAYER M1 ;
+      RECT 8.000 39.000 9.000 40.000 ;
+    END
+  END y
+END simple_alu
+
+END LIBRARY

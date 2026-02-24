@@ -1,0 +1,20 @@
+VERSION 5.8 ;
+DIVIDERCHAR "/" ;
+BUSBITCHARS "[]" ;
+DESIGN chip_top ;
+UNITS DISTANCE MICRONS 100 ;
+DIEAREA ( 0 0 ) ( 120000 120000 ) ;
+
+COMPONENTS 4 ;
+  - u_rom simple_rom + PLACED ( 35000 55000 ) N ;
+  - u_rom2 simple_rom + PLACED ( 65000 40000 ) N ;
+  - u_add simple_alu + PLACED ( 55000 65000 ) N ;
+  - u_xor simple_alu + PLACED ( 45000 35000 ) N ;
+END COMPONENTS
+
+NETS 2 ;
+  - A ( u_rom data ) ( u_add a ) ( u_xor a ) ;
+  - B ( u_rom2 data ) ( u_add b ) ( u_xor b ) ;
+END NETS
+
+END DESIGN

@@ -2,100 +2,72 @@
   "top": "chip_top",
   "instances": [
     {
-      "name": "u_rom_a",
-      "type": "lookup_table_a"
+      "name": "u_cnt",
+      "type": "counter"
     },
     {
-      "name": "u_rom_b",
-      "type": "lookup_table_b"
-    },
-    {
-      "name": "u_alu",
-      "type": "combinational_alu"
+      "name": "u_and",
+      "type": "and2"
     }
   ],
   "nets": [
     {
       "name": "clk",
-      "pins": []
-    },
-    {
-      "name": "rst_n",
-      "pins": []
-    },
-    {
-      "name": "gpio_a",
-      "pins": []
-    },
-    {
-      "name": "gpio_b",
-      "pins": []
-    },
-    {
-      "name": "4'h0",
       "pins": [
         {
-          "inst": "u_rom_a",
-          "pin": "addr"
+          "inst": "u_cnt",
+          "pin": "clk"
         }
       ]
     },
     {
-      "name": "rom_a_data",
+      "name": "rst",
       "pins": [
         {
-          "inst": "u_rom_a",
-          "pin": "data"
-        },
+          "inst": "u_cnt",
+          "pin": "rst"
+        }
+      ]
+    },
+    {
+      "name": "a",
+      "pins": [
         {
-          "inst": "u_alu",
+          "inst": "u_and",
           "pin": "a"
         }
       ]
     },
     {
-      "name": "4'h1",
+      "name": "b",
       "pins": [
         {
-          "inst": "u_rom_b",
-          "pin": "addr"
-        }
-      ]
-    },
-    {
-      "name": "rom_b_data",
-      "pins": [
-        {
-          "inst": "u_rom_b",
-          "pin": "data"
-        },
-        {
-          "inst": "u_alu",
+          "inst": "u_and",
           "pin": "b"
         }
       ]
     },
     {
-      "name": "2'b00",
+      "name": "q",
       "pins": [
         {
-          "inst": "u_alu",
-          "pin": "op"
+          "inst": "u_cnt",
+          "pin": "q"
         }
       ]
     },
     {
-      "name": "alu_result",
+      "name": "y",
       "pins": [
         {
-          "inst": "u_alu",
+          "inst": "u_and",
           "pin": "y"
         }
       ]
     }
   ],
   "stats": {
-    "instances": 3,
-    "nets": 10
+    "instances": 2,
+    "nets": 6
   }
 }
