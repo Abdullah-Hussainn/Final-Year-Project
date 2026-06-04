@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { 
-  Upload, X, FileCode, Play, Download, Copy, CheckCircle2, 
+  Upload, X, FileCode, Play, Download, Copy, 
   AlertCircle, ChevronDown, ChevronUp, Loader2, Network
 } from 'lucide-react'
 import { useApiHealth } from '../utils/useApiHealth'

@@ -1,7 +1,7 @@
-import NetlistUploader from './components/NetlistUploader'
+import PlacementDashboard from './components/PlacementDashboard'
 
 function App() {
-  return <NetlistUploader />
+  return <PlacementDashboard />
 }
 
 export default App

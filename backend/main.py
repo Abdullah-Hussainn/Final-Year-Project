@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional, List
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -18,6 +18,10 @@ logger = logging.getLogger(__name__)
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from netlist_parser import build_netlist_graph, graph_to_json
+
+# Backend demo pipeline (parse -> saved placement -> metrics -> DEF/LEF -> PNG).
+# Imported as a package so its relative imports (from . import metrics) resolve.
+from backend.pipeline.full_pipeline import run_pipeline
 
 app = FastAPI(title="Netlist Builder API")
 
@@ -34,6 +38,18 @@ app.add_middleware(
 # Ensure output directory exists
 OUTPUT_DIR = Path(__file__).parent.parent / "out"
 OUTPUT_DIR.mkdir(exist_ok=True)
+
+# Pipeline artifacts directory (placement.png, placement.def, macros.lef, metrics.json)
+OUTPUTS_DIR = Path(__file__).parent / "outputs"
+OUTPUTS_DIR.mkdir(exist_ok=True)
+
+# Whitelist of files servable via /api/outputs/{filename} and their media types.
+SERVABLE_OUTPUTS = {
+    "placement.png": "image/png",
+    "placement.def": "text/plain",
+    "macros.lef": "text/plain",
+    "metrics.json": "application/json",
+}
 
 
 @app.post("/api/netlist")
@@ -188,6 +204,137 @@ async def parse_netlist(
                     pass
         except:
             pass
+
+
+@app.post("/api/place")
+async def place_design(
+    files: List[UploadFile] = File(...),
+    top_module: Optional[str] = Form(None),
+):
+    """
+    Run the floorplanning pipeline on uploaded Verilog files.
+
+    This is the backend-API milestone: it reuses the current saved-placement flow
+    (no live PPO inference yet). It parses the netlist, loads the saved placement,
+    computes metrics, and writes placement.png / placement.def / macros.lef /
+    metrics.json into backend/outputs, then returns a JSON summary with URLs.
+
+    Args:
+        files: List of Verilog files (.v or .sv)
+        top_module: Optional top module name (defaults to "chip_top")
+
+    Returns:
+        JSON with status, top module, instance/net counts, metrics, artifact URLs,
+        and the live_ppo_inference flag.
+    """
+    top = (top_module or "").strip() or "chip_top"
+    backend_dir = Path(__file__).parent
+    upload_dir = backend_dir / "temp"
+    upload_dir.mkdir(exist_ok=True)
+
+    saved_paths: List[Path] = []
+    try:
+        # Save uploaded Verilog files temporarily (absolute paths for the pipeline).
+        for file in files:
+            if not file.filename or not file.filename.endswith((".v", ".sv")):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"File {file.filename!r} is not a Verilog file (.v or .sv)",
+                )
+            content = await file.read()
+            if not content:
+                raise HTTPException(status_code=400, detail=f"File {file.filename} is empty")
+            # Strip any directory components from the client-provided name.
+            dest = upload_dir / Path(file.filename).name
+            with open(dest, "wb") as f:
+                f.write(content)
+            saved_paths.append(dest)
+
+        if not saved_paths:
+            raise HTTPException(status_code=400, detail="No Verilog files were provided.")
+
+        # Run the demo pipeline. Keep errors clean for the frontend (no tracebacks).
+        try:
+            summary = run_pipeline(
+                verilog_files=[str(p) for p in saved_paths],
+                top_module=top,
+                output_dir=str(OUTPUTS_DIR),
+            )
+        except FileNotFoundError as e:
+            # e.g. placement_results.json missing (saved-placement flow prerequisite).
+            raise HTTPException(status_code=400, detail=str(e))
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:  # noqa: BLE001
+            logger.error(f"Placement pipeline failed: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Placement pipeline failed: {e}")
+
+        # Prefer the metrics persisted in metrics.json; fall back to the summary.
+        metrics_data = {}
+        metrics_path = OUTPUTS_DIR / "metrics.json"
+        if metrics_path.exists():
+            try:
+                metrics_data = json.loads(metrics_path.read_text())
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"Could not read metrics.json: {e}")
+
+        netlist = summary.get("netlist", {})
+        response = {
+            "status": "ok",
+            "top_module": summary.get("top_module", top),
+            "instance_count": netlist.get("instances"),
+            "net_count": netlist.get("nets"),
+            "placement_method": summary.get("placement_method"),
+            "live_ppo_inference": summary.get("live_ppo_inference", False),
+            "metrics": metrics_data.get("metrics", summary.get("metrics")),
+            "placement_image_url": "/api/outputs/placement.png",
+            "def_url": "/api/outputs/placement.def",
+            "lef_url": "/api/outputs/macros.lef",
+            "metrics_url": "/api/outputs/metrics.json",
+        }
+        return JSONResponse(content=response)
+
+    finally:
+        # Clean up uploaded files.
+        for p in saved_paths:
+            try:
+                if p.exists():
+                    p.unlink()
+            except Exception:
+                pass
+        # Clean up PyVerilog temp files that may be created in the CWD.
+        for cwd in {Path.cwd(), backend_dir, Path(__file__).parent.parent}:
+            for temp_file in list(cwd.glob("preprocess.*")) + [cwd / "parser.out", cwd / "parsetab.py"]:
+                try:
+                    if temp_file.exists():
+                        temp_file.unlink()
+                except Exception:
+                    pass
+
+
+@app.get("/api/outputs/{filename}")
+async def get_output(filename: str):
+    """
+    Serve a generated pipeline artifact from backend/outputs.
+
+    Only files in the SERVABLE_OUTPUTS whitelist are served, and the filename is
+    validated to prevent path traversal (no slashes, no '..').
+    """
+    # Reject anything that isn't a bare filename (blocks path traversal).
+    if filename != Path(filename).name or filename not in SERVABLE_OUTPUTS:
+        raise HTTPException(status_code=404, detail="File not found")
+
+    file_path = (OUTPUTS_DIR / filename).resolve()
+    # Defense in depth: ensure the resolved path stays inside OUTPUTS_DIR.
+    if OUTPUTS_DIR.resolve() not in file_path.parents:
+        raise HTTPException(status_code=404, detail="File not found")
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"{filename} not found. Run POST /api/place first to generate it.",
+        )
+
+    return FileResponse(file_path, media_type=SERVABLE_OUTPUTS[filename], filename=filename)
 
 
 @app.get("/api/health")

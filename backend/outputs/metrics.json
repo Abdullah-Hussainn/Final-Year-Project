@@ -1,0 +1,44 @@
+{
+  "design": "chip_top",
+  "top_module": "chip_top",
+  "netlist_source": "placement_results_json",
+  "placement_method": "thermal_ppo",
+  "live_ppo_inference": false,
+  "grid": {
+    "H": 24,
+    "W": 24
+  },
+  "metrics": {
+    "hpwl": 32.0,
+    "congestion_top10": 0.701754,
+    "thermal_score": 6.220075,
+    "num_components": 4,
+    "num_multi_pin_nets": 2
+  },
+  "placements": {
+    "u_rom": [
+      5,
+      13,
+      5,
+      4
+    ],
+    "u_rom2": [
+      14,
+      5,
+      5,
+      4
+    ],
+    "u_add": [
+      14,
+      13,
+      4,
+      3
+    ],
+    "u_xor": [
+      6,
+      6,
+      4,
+      3
+    ]
+  }
+}

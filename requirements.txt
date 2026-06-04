@@ -1,7 +1,15 @@
 pyverilog
 networkx
 matplotlib
+numpy
 fastapi
 uvicorn[standard]
 python-multipart
+
+# Needed only for the future live-PPO inference step in the backend pipeline
+# (currently the pipeline reuses the saved placement from placement_results.json).
+# Uncomment when wiring MaskablePPO inference into backend/pipeline/full_pipeline.py:
+# gymnasium
+# stable-baselines3
+# sb3-contrib
 
