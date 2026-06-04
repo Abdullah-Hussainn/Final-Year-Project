@@ -2,72 +2,130 @@
   "top": "chip_top",
   "instances": [
     {
-      "name": "u_cnt",
-      "type": "counter"
+      "name": "u_rom",
+      "type": "simple_rom"
     },
     {
-      "name": "u_and",
-      "type": "and2"
+      "name": "u_rom2",
+      "type": "simple_rom"
+    },
+    {
+      "name": "u_add",
+      "type": "simple_alu"
+    },
+    {
+      "name": "u_xor",
+      "type": "simple_alu"
     }
   ],
   "nets": [
     {
       "name": "clk",
+      "pins": []
+    },
+    {
+      "name": "rst_n",
+      "pins": []
+    },
+    {
+      "name": "gpio_a",
+      "pins": []
+    },
+    {
+      "name": "gpio_b",
+      "pins": []
+    },
+    {
+      "name": "1'b0",
       "pins": [
         {
-          "inst": "u_cnt",
-          "pin": "clk"
+          "inst": "u_rom",
+          "pin": "addr"
         }
       ]
     },
     {
-      "name": "rst",
+      "name": "A",
       "pins": [
         {
-          "inst": "u_cnt",
-          "pin": "rst"
-        }
-      ]
-    },
-    {
-      "name": "a",
-      "pins": [
+          "inst": "u_rom",
+          "pin": "data"
+        },
         {
-          "inst": "u_and",
+          "inst": "u_add",
+          "pin": "a"
+        },
+        {
+          "inst": "u_xor",
           "pin": "a"
         }
       ]
     },
     {
-      "name": "b",
+      "name": "1'b1",
       "pins": [
         {
-          "inst": "u_and",
+          "inst": "u_rom2",
+          "pin": "addr"
+        }
+      ]
+    },
+    {
+      "name": "B",
+      "pins": [
+        {
+          "inst": "u_rom2",
+          "pin": "data"
+        },
+        {
+          "inst": "u_add",
+          "pin": "b"
+        },
+        {
+          "inst": "u_xor",
           "pin": "b"
         }
       ]
     },
     {
-      "name": "q",
+      "name": "2'b00",
       "pins": [
         {
-          "inst": "u_cnt",
-          "pin": "q"
+          "inst": "u_add",
+          "pin": "op"
         }
       ]
     },
     {
-      "name": "y",
+      "name": "Y_add",
       "pins": [
         {
-          "inst": "u_and",
+          "inst": "u_add",
+          "pin": "y"
+        }
+      ]
+    },
+    {
+      "name": "2'b10",
+      "pins": [
+        {
+          "inst": "u_xor",
+          "pin": "op"
+        }
+      ]
+    },
+    {
+      "name": "Y_xor",
+      "pins": [
+        {
+          "inst": "u_xor",
           "pin": "y"
         }
       ]
     }
   ],
   "stats": {
-    "instances": 2,
-    "nets": 6
+    "instances": 4,
+    "nets": 12
   }
 }

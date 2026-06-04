@@ -1,0 +1,8 @@
+read_lef /workspace/out/macros.lef
+read_def /workspace/out/placement_thermal_ppo.def
+check_placement
+report_design_area
+report_instances
+report_nets
+estimate_parasitics -placement
+report_wire_length

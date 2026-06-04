@@ -1,0 +1,832 @@
+FYP.ipynb Formulae and Metrics Summary
+======================================
+
+Workspace file: C:\Users\abdul\PycharmProjects\JupyterProject\FYP.ipynb
+Summary file: C:\Users\abdul\PycharmProjects\JupyterProject\FYP_formulae_summary.txt
+
+Purpose
+-------
+This note collects the main formulae used in FYP.ipynb for:
+- netlist-derived placement evaluation
+- wirelength estimation
+- congestion estimation
+- spacing / halo legality
+- thermal scoring
+- reinforcement-learning reward
+- OpenROAD DEF/LEF scaling
+
+Important note on notebook state
+--------------------------------
+FYP.ipynb contains multiple generations of logic:
+- early baseline placement and PPO cells
+- newer spacing / thermal helper cells
+- thermal PPO training cells
+- legacy cells preserved as disabled history
+
+Where there are duplicate formulae, this summary points out which ones are active
+for evaluation and which ones are older baseline versions.
+
+
+1. Core Placement Representation
+--------------------------------
+Used throughout the notebook:
+
+    placements[name] = (y, x, h, w)
+
+where:
+- y = macro top-left row on the RL grid
+- x = macro top-left column on the RL grid
+- h = macro height in grid cells
+- w = macro width in grid cells
+
+Grid size:
+- H = number of grid rows
+- W = number of grid columns
+- common value in notebook: H = 24, W = 24
+
+
+2. Netlist Representation
+-------------------------
+Main extraction cell: Cell 6
+
+Instances are stored like:
+
+    {"name": "u_rom", "type": "simple_rom"}
+
+Nets are stored like:
+
+    {
+      "A": [{"inst": "u_rom", "pin": "data"}, {"inst": "u_add", "pin": "a"}, ...],
+      ...
+    }
+
+Graph source:
+- G_src is the networkx graph built from the parsed Verilog
+- neighbors of a net node are used to find connected instance nodes
+
+
+3. Macro Center Formula
+-----------------------
+Used in HPWL, congestion, and thermal calculations.
+Appears in multiple cells, including active helper flow.
+
+Formula:
+
+    center_y = y + h / 2.0
+    center_x = x + w / 2.0
+
+Meaning:
+- each macro rectangle is approximated by its center point
+- that center is used as the pin surrogate for placement metrics
+
+
+4. HPWL: Half-Perimeter Wire Length
+-----------------------------------
+Active forms appear in:
+- Cell 22 baseline PPO logic
+- Cell 27 plotting helper
+- Cell 28 evaluation helpers indirectly via hpwl_total_from_placements(...)
+
+For one net with points:
+
+    HPWL_net = (max(xs) - min(xs)) + (max(ys) - min(ys))
+
+where:
+- xs = all x coordinates of connected macro centers
+- ys = all y coordinates of connected macro centers
+
+Total HPWL:
+
+    HPWL_total = sum(HPWL_net for each net)
+
+How it is worked out:
+1. For each net, gather all connected placed instances
+2. Convert each instance box (y, x, h, w) to a center point
+3. Compute the width and height of the smallest axis-aligned box covering them
+4. Add width + height
+5. Sum over all nets
+
+Interpretation:
+- lower HPWL means shorter estimated total wirelength
+- optimizing only HPWL tends to cluster connected macros
+
+
+5. Basic Route Approximation for Congestion
+-------------------------------------------
+Active evaluation path: Cell 28 via compute_congestion_proxy(...)
+Underlying route-counting logic is inherited from earlier compute_congestion(...)
+
+The notebook does not run a detailed router.
+It uses a Manhattan L-shape route approximation between macro centers.
+
+For each net:
+1. collect the centers of connected macros
+2. take the first center as an anchor (y0, x0)
+3. for every other connected center (y1, x1), route:
+   - horizontal first
+   - vertical second
+
+Grid update formula:
+
+    congestion_map[y0, xlo:xhi+1] += 1
+    congestion_map[ylo:yhi+1, x1] += 1
+
+where:
+- xlo, xhi = sorted(x0, x1)
+- ylo, yhi = sorted(y0, y1)
+
+Meaning:
+- each routed grid cell gets one extra unit of route demand
+- repeated overlap between nets creates congestion hotspots
+
+Why this approximation:
+- fast to compute
+- suitable for RL training and notebook-scale experiments
+- not a final routing signoff model
+
+
+6. Congestion Smoothing
+-----------------------
+Active helper cell: Cell 28
+Library: scipy.ndimage.convolve1d if available
+
+Smoothing kernel:
+
+    kernel = np.ones(5) / 5.0
+
+Applied as:
+
+    smooth = convolve1d(grid, kernel, axis=0, mode='nearest')
+    smooth = convolve1d(smooth, kernel, axis=1, mode='nearest')
+
+Meaning:
+- spreads route density to nearby cells
+- reduces blocky artifacts
+- makes the congestion map behave more like a heat map
+
+
+7. Congestion Score
+-------------------
+Used in baseline and active helper logic.
+
+Flatten the congestion map:
+
+    flat = cong_map.flatten()
+
+Take the hottest 10 percent:
+
+    k = max(1, int(0.10 * flat.size))
+    congestion_score = mean(top k values)
+
+In some helper code ceil(...) is used instead of int(...), but the idea is identical:
+- use the top 10 percent of grid cells
+- average them
+
+Meaning:
+- this metric measures hotspot severity, not global average congestion
+- lower is better
+
+
+8. Spacing / Halo Model
+-----------------------
+Active logic: Cell 28
+
+Main constant:
+
+    CHANNEL_PADDING = 2
+
+This means each macro gets a 2-cell keepout halo for legality checks.
+
+8.1 Actual macro fit condition
+
+    y >= 0
+    x >= 0
+    y + h <= H
+    x + w <= W
+
+8.2 Padded rectangle formula
+
+    y0 = y - padding
+    x0 = x - padding
+    y1 = y + h + padding
+    x1 = x + w + padding
+
+then clipped to the grid:
+
+    y0 = max(0, y0)
+    x0 = max(0, x0)
+    y1 = min(H, y1)
+    x1 = min(W, x1)
+
+8.3 Rectangle overlap test
+
+Two rectangles overlap unless one is fully separated:
+
+    not (
+        y1 + h1 <= y2 or
+        y2 + h2 <= y1 or
+        x1 + w1 <= x2 or
+        x2 + w2 <= x1
+    )
+
+8.4 Halo legality
+
+A placement candidate is legal if:
+- the actual macro fits inside the grid
+- the padded candidate box does not overlap any other padded box
+
+8.5 Spacing penalty
+
+If padded boxes overlap:
+
+    spacing_penalty += overlap_area
+
+Meaning:
+- legal_spacing_pass = True means no halo overlap
+- the halo models reserved routing channel space between macros
+
+
+9. Power Model
+--------------
+Active helper cell: Cell 28
+
+    POWER_TABLE = {
+        'simple_rom': 1.2,
+        'simple_alu': 1.8,
+    }
+
+Meaning:
+- ALU is modeled as hotter than ROM
+- these are relative power weights, not measured watts
+
+Used in:
+- thermal map generation
+- macro-pair proximity penalty
+- observation vector for thermal PPO
+
+
+10. Thermal Heatmap
+-------------------
+Active helper cell: Cell 28
+Function: compute_thermal_score(...)
+
+Main constants:
+
+    THERMAL_ALPHA_WIRE = 0.5
+    WIRE_HEAT_WEIGHT = 0.5
+    FALLOFF_EXP = 1.5
+    THERMAL_SAFE_DISTANCE = 8.0
+    HOTSPOT_WEIGHT = 1.5
+    PROXIMITY_WEIGHT = 3.0
+
+10.1 Macro heat contribution
+
+For each macro:
+- find center (cy, cx)
+- look up power from POWER_TABLE
+- add heat to every grid cell
+
+Formula:
+
+    distance = sqrt((gy - cy)^2 + (gx - cx)^2)
+    thermal_map[gy, gx] += power / ((distance + 1.0) ** FALLOFF_EXP)
+
+Meaning of terms:
+- power: relative heat generation of that macro type
+- distance: Euclidean distance from macro center to grid cell
+- +1.0: avoids division by zero at the source
+- FALLOFF_EXP = 1.5: makes heat decay faster than 1/r
+
+Interpretation:
+- closer cells are hotter
+- farther cells receive less heat
+- tighter clusters produce stronger combined peaks
+
+10.2 Wire/congestion heat contribution
+
+If congestion_map is available:
+
+    thermal_map += alpha_wire * congestion_map
+
+In active helper defaults:
+
+    alpha_wire = WIRE_HEAT_WEIGHT = 0.5
+
+Meaning:
+- dense routing adds extra thermal burden
+- not only macros, but also routing crowding contributes to hotspot formation
+
+10.3 Hotspot score from thermal map
+
+Flatten the thermal map:
+
+    flat = thermal_map.flatten()
+
+Take the hottest 10 percent:
+
+    k = max(1, ceil(0.10 * flat.size))
+    thermal_hotspot = mean(top k values)
+
+Meaning:
+- this is a hotspot-region metric
+- less noisy than using only the hottest single cell
+
+10.4 Macro proximity penalty
+
+For every pair of macros A and B:
+
+    dist = sqrt((cy_a - cy_b)^2 + (cx_a - cx_b)^2)
+    pair_penalty = (power_a * power_b) / (dist + 1.0)
+
+If macros are too close:
+
+    if dist < THERMAL_SAFE_DISTANCE:
+        pair_penalty += ((THERMAL_SAFE_DISTANCE - dist) / THERMAL_SAFE_DISTANCE) * power_a * power_b
+
+Meaning:
+- hot-hot pairs get larger penalty
+- closer pairs get larger penalty
+- if they are within 8 grid cells, there is an additional near-field penalty
+
+10.5 Final thermal score
+
+    thermal_score =
+        HOTSPOT_WEIGHT * thermal_hotspot
+        + PROXIMITY_WEIGHT * proximity_penalty
+
+With current active constants:
+
+    HOTSPOT_WEIGHT = 1.5
+    PROXIMITY_WEIGHT = 3.0
+
+Meaning:
+- hotspot severity matters
+- pairwise macro closeness matters even more strongly
+- lower thermal_score is better
+
+
+11. Thermal Summary Metrics
+---------------------------
+Active helper cell: Cell 28
+Function: thermal_map_stats(...)
+
+11.1 Maximum temperature proxy
+
+    max_temp = max(thermal_map)
+
+Meaning:
+- hottest single cell in the thermal map
+
+11.2 Mean top-10-percent temperature proxy
+
+    top10_temp = mean(top 10 percent of thermal_map cells)
+
+Meaning:
+- broader measure of hotspot severity
+- better indicator of how much of the chip is very hot
+
+
+12. Active Evaluation Function
+------------------------------
+Active helper cell: Cell 28
+Function: evaluate_method(...)
+
+For a given placement, this function computes:
+
+1. geometry validity
+2. spacing validity
+3. spacing penalty
+4. HPWL
+5. congestion map and congestion score
+6. thermal map and thermal score
+7. max_temp and top10_temp
+
+Returned fields:
+- hpwl
+- congestion
+- thermal_score
+- max_temp
+- top10_temp
+- spacing_penalty
+- legal_spacing_pass
+- geometry_pass
+- spacing_violations
+- errors
+- congestion_map
+- thermal_map
+
+This function is what ultimately feeds the comparison table.
+
+
+13. Comparison Table Metrics
+----------------------------
+Active helper cell: Cell 28
+Function: print_comparison_table(...)
+
+Columns:
+- Method
+- HPWL
+- Congestion
+- Thermal Score
+- Max Temp
+- Mean Top10 Temp
+- Spacing Pass
+
+Interpretation:
+- HPWL: wirelength compactness proxy
+- Congestion: routing hotspot proxy
+- Thermal Score: combined thermal objective proxy
+- Max Temp: hottest point
+- Mean Top10 Temp: worst-region average
+- Spacing Pass: whether padded macro legality is satisfied
+
+
+14. Random Placement Baseline
+-----------------------------
+Active baseline cell: Cell 29
+Function: random_place_with_padding(...)
+
+Method:
+- for each macro
+- sample random top-left legal locations
+- accept the first location satisfying halo legality
+
+Parameters:
+- seed = 7
+- max_tries = 5000
+
+Purpose:
+- lower-bound heuristic baseline
+- often poor HPWL but naturally more spread than a wirelength-driven placer
+
+
+15. Greedy Placement Baseline
+-----------------------------
+Active baseline cell: Cell 29
+Function: greedy_place_with_padding(...)
+
+Placement order:
+- sort by area = h * w
+- break ties with net degree
+- larger, more connected macros placed first
+
+Incremental cost:
+
+    inc_hpwl += hpwl_points(points)
+
+Meaning:
+- greedy chooses the legal position that gives the smallest incremental wirelength
+- it is mostly an HPWL-driven heuristic
+
+Tradeoff:
+- often better HPWL than random
+- often worse thermal clustering than random
+
+
+16. Baseline PPO Reward (Older Non-Thermal PPO)
+-----------------------------------------------
+Baseline PPO logic appears in earlier active cells, especially Cell 22.
+
+Reward formula:
+
+    reward = -(hpwl + lam_cong * congestion_top10)
+
+where:
+- hpwl = total HPWL
+- congestion_top10 = congestion score
+- lam_cong = small weight, historically 0.01 in the baseline setup
+
+Meaning:
+- RL maximizes reward, so the negative sign converts cost minimization into reward maximization
+- this baseline PPO is not thermal-aware
+
+
+17. Normalized Reward Helper (Defined, but Not Active in Final Thermal Reward)
+------------------------------------------------------------------------------
+Active helper cell: Cell 28
+Function: normalize_reward_terms(...)
+
+Formula:
+
+    hpwl_norm = hpwl / max(1.0, H + W)
+    cong_norm = congestion / max(1.0, MAX_CONG_REF)
+    thermal_norm = thermal / max(1.0, MAX_THERMAL_REF)
+
+Current reference constants:
+
+    MAX_CONG_REF = 1.0
+    MAX_THERMAL_REF = 5.0
+
+Purpose:
+- to make HPWL, congestion, and thermal terms numerically comparable
+
+Important note:
+- this helper exists in the notebook
+- but the currently active thermal PPO reward cell does not actually use it
+
+
+18. Active Thermal PPO Environment
+----------------------------------
+Active thermal PPO cell: Cell 30
+
+Libraries used:
+- gymnasium
+- gymnasium.spaces
+- sb3_contrib.MaskablePPO
+- sb3_contrib.common.wrappers.ActionMasker
+- torch
+
+18.1 Observation
+
+    observation = {
+        'canvas': occupancy grid,
+        'cur': [h/H, w/W, degree_norm, idx_norm, power_norm]
+    }
+
+Meaning of cur entries:
+- h/H: normalized current macro height
+- w/W: normalized current macro width
+- degree_norm: current macro connectivity divided by maximum connectivity
+- idx_norm: current placement step index divided by total number of steps
+- power_norm: current macro power divided by maximum macro power
+
+18.2 Action
+
+    action in {0, ..., H*W - 1}
+    y, x = divmod(action, W)
+
+Meaning:
+- each discrete action selects a top-left grid position
+
+18.3 Action mask
+
+The PPO policy receives a legal-action mask:
+- True only where the current macro can be placed legally with halo spacing
+- illegal actions are masked out for normal PPO selection
+
+18.4 Episode length
+
+One episode = placing all macros once.
+If there are 4 macros, ideal episode length is 4 valid steps.
+
+
+19. Active Thermal PPO Reward (Current Actual Training Reward)
+--------------------------------------------------------------
+Active thermal PPO cell: Cell 30
+
+Current actual reward at terminal placement:
+
+    reward = -(
+        hpwl
+        + lam_cong * congestion_value
+        + lam_thermal * thermal_value
+    )
+
+In the currently active training env instantiation, the visible parameters are:
+
+    lam_cong = 0.5
+    lam_thermal = 1.0
+    channel_padding = CHANNEL_PADDING
+    alpha_wire = THERMAL_ALPHA_WIRE
+
+Important note:
+- the helper cell defines:
+
+      LAM_HPWL = 0.6
+      LAM_CONG = 0.4
+      LAM_THERMAL = 2.5
+
+  and also defines normalized reward helpers,
+  but the active training reward shown above still uses the older raw-sum form.
+
+This means:
+- evaluation logic is newer and stronger
+- active training reward is still older and unnormalized
+
+This mismatch can explain why training may still look too HPWL-driven.
+
+
+20. Illegal Action Penalty and Termination
+------------------------------------------
+Active thermal PPO cell: Cell 30
+
+If the PPO policy proposes an illegal action:
+
+    reward = -0.1
+
+and the episode continues.
+
+Termination condition:
+
+    terminated = (idx >= len(order))
+
+Meaning:
+- once all macros have been placed, the episode ends
+
+If no legal actions remain before finishing:
+- the env raises RuntimeError
+
+Bounded evaluation rollout:
+
+    max_steps = len(instance_names_eval) + 5
+
+Meaning:
+- prevents evaluation from hanging forever
+
+
+21. PPO Training Hyperparameters
+--------------------------------
+Active thermal PPO cell: Cell 30
+
+Visible values:
+
+    TIMESTEPS_THERMAL = 100_000
+    learning_rate = 3e-4
+    gamma = 0.99
+    n_steps = 2048
+    batch_size = 256
+    ent_coef = 0.01
+    clip_range = 0.2
+    seed = 42
+
+Meaning:
+- TIMESTEPS_THERMAL: number of RL interaction steps
+- learning_rate: optimizer step size
+- gamma: reward discount factor
+- n_steps: rollout length per PPO iteration
+- batch_size: minibatch size for updates
+- ent_coef: entropy bonus, encourages exploration
+- clip_range: PPO trust-region-style update limit
+- seed: reproducibility
+
+
+22. Training Log Metrics (PPO Console Output)
+---------------------------------------------
+These are not notebook formulas, but they are key reported metrics during training.
+
+22.1 rollout/ep_len_mean
+- average episode length
+- in this project, often equals the number of macros placed successfully
+
+22.2 rollout/ep_rew_mean
+- mean episode reward over recent rollouts
+- less negative means better, because reward is negative placement cost
+
+22.3 train/approx_kl
+- approximate KL divergence between old and updated policy
+- measures how much the policy changed per PPO update
+
+22.4 train/clip_fraction
+- fraction of updates that hit PPO clipping
+- moderate nonzero values usually indicate active learning
+
+22.5 train/entropy_loss
+- related to policy entropy / randomness
+- more negative magnitude often corresponds to higher randomness
+
+22.6 train/explained_variance
+- quality of value-function prediction
+- near 1.0 is good, near 0 poor, negative worse than constant prediction
+
+22.7 train/loss
+- overall optimizer loss
+
+22.8 train/policy_gradient_loss
+- policy update objective contribution
+
+22.9 train/value_loss
+- value-network prediction error
+
+
+23. OpenROAD Scaling and DEF/LEF Export
+---------------------------------------
+Relevant export helpers appear in Cells 6, 31, and 32.
+Current final out/ export cell: Cell 32
+
+Main constants:
+
+    DBU = 100
+    GRID_CELL_MICRONS = 50
+    DEF_SCALE = DBU * GRID_CELL_MICRONS = 5000
+
+Meaning:
+- 1 micron = 100 DEF database units
+- 1 RL grid cell = 50 microns
+- therefore 1 RL grid cell = 5000 DEF units
+
+23.1 DEF die area scaling
+
+    die_width_def = W * DEF_SCALE
+    die_height_def = H * DEF_SCALE
+
+Example for H = W = 24:
+
+    24 * 5000 = 120000
+
+So:
+
+    DIEAREA ( 0 0 ) ( 120000 120000 ) ;
+
+23.2 Macro size scaling
+
+For a macro box (y, x, h, w):
+
+    physical_width_def = w * DEF_SCALE
+    physical_height_def = h * DEF_SCALE
+
+LEF size in microns is therefore:
+
+    width_um = w * GRID_CELL_MICRONS
+    height_um = h * GRID_CELL_MICRONS
+
+23.3 Corrected DEF coordinate mapping
+
+Notebook coordinates:
+- top-left origin
+- y increases downward
+
+DEF coordinates:
+- bottom-left origin
+- y increases upward
+
+Correct export formula:
+
+    x_def = x * DEF_SCALE
+    y_def = (H - y - h) * DEF_SCALE
+
+Meaning:
+- x maps directly
+- y must be flipped and converted from top edge to bottom-left macro origin
+
+
+24. Route Approximation vs DEF Export
+-------------------------------------
+These are separate concerns:
+
+Route approximation:
+- used only for congestion / thermal evaluation
+- center-to-center Manhattan L-shape proxy
+
+DEF export:
+- used only to map the final placement to OpenROAD physical coordinates
+- uses corrected scale and Y-axis conversion
+
+
+25. Key Tradeoffs Encoded by the Notebook
+-----------------------------------------
+HPWL:
+- lower is better for wirelength
+- but optimizing only HPWL encourages clustering
+
+Congestion:
+- lower is better for routing demand
+- compact placements may increase local route overlap
+
+Thermal score:
+- lower is better for hotspot reduction
+- spreading hot macros may increase HPWL
+
+Spacing legality:
+- improves physical realism and routing room
+- reduces available placement freedom
+
+This is why macro placement is treated as a multi-objective optimization problem.
+
+
+26. Recommended Cells to Cite in a Viva
+---------------------------------------
+If asked where the logic lives:
+
+- Netlist extraction and basic export:
+  Cell 6
+
+- Early baseline HPWL / congestion / PPO:
+  Cells 14, 16, 22
+
+- Plot-only HPWL from placements JSON:
+  Cell 27
+
+- Active spacing, thermal, and evaluation helper logic:
+  Cell 28
+
+- Active random and greedy baselines:
+  Cell 29
+
+- Active thermal PPO training and reward:
+  Cell 30
+
+- Active comparison / save logic:
+  Cell 31
+
+- Final out/ export cell:
+  Cell 32
+
+
+27. Final One-Line Summary
+--------------------------
+The notebook evaluates each placement by combining:
+- center-based HPWL for wirelength,
+- Manhattan route-density congestion for routing pressure,
+- distance-based thermal diffusion plus hot-macro proximity penalty for thermal behavior,
+- and halo-based spacing legality for physical plausibility,
+while exporting the final placement to OpenROAD by scaling each RL grid cell to 50 microns and converting notebook top-left coordinates into DEF bottom-left coordinates.

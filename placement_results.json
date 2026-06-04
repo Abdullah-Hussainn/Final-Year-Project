@@ -169,35 +169,194 @@
     "greedy": {
       "hpwl": 19.0,
       "congestion_top10": 0.7017543859649122
-    },
-    "ppo": {
-      "hpwl": 20.0,
-      "congestion_top10": 0.5614035087719298
     }
   },
-  "timestamp": "2026-02-24 00:42:00",
-  "placements_ppo": {
+  "timestamp": "2026-05-11 22:04:45",
+  "channel_padding": 2,
+  "power_table": {
+    "simple_rom": 1.2,
+    "simple_alu": 1.8
+  },
+  "random_metrics": {
+    "hpwl": 60.5,
+    "congestion": 0.5592982456140352,
+    "thermal_score": 3.6047356565815427,
+    "spacing_penalty": 0.0,
+    "legal_spacing_pass": true,
+    "geometry_pass": true,
+    "errors": [],
+    "placements": {
+      "u_rom": [
+        18,
+        13,
+        5,
+        4
+      ],
+      "u_rom2": [
+        16,
+        4,
+        5,
+        4
+      ],
+      "u_add": [
+        1,
+        6,
+        4,
+        3
+      ],
+      "u_xor": [
+        5,
+        19,
+        4,
+        3
+      ]
+    }
+  },
+  "greedy_metrics": {
+    "hpwl": 39.0,
+    "congestion": 0.7789473684210528,
+    "thermal_score": 5.37913334950603,
+    "spacing_penalty": 0.0,
+    "legal_spacing_pass": true,
+    "geometry_pass": true,
+    "errors": [],
+    "placements": {
+      "u_rom": [
+        0,
+        0,
+        5,
+        4
+      ],
+      "u_rom2": [
+        0,
+        8,
+        5,
+        4
+      ],
+      "u_add": [
+        0,
+        16,
+        4,
+        3
+      ],
+      "u_xor": [
+        8,
+        16,
+        4,
+        3
+      ]
+    }
+  },
+  "ppo_metrics": null,
+  "thermal_ppo_metrics": {
+    "hpwl": 32.0,
+    "congestion": 0.3698245614035088,
+    "thermal_score": 5.9585138405867575,
+    "spacing_penalty": 0.0,
+    "legal_spacing_pass": true,
+    "geometry_pass": true,
+    "errors": [],
+    "placements": {
+      "u_rom": [
+        5,
+        13,
+        5,
+        4
+      ],
+      "u_rom2": [
+        14,
+        5,
+        5,
+        4
+      ],
+      "u_add": [
+        14,
+        13,
+        4,
+        3
+      ],
+      "u_xor": [
+        6,
+        6,
+        4,
+        3
+      ]
+    }
+  },
+  "placements_random_spaced": {
     "u_rom": [
-      11,
-      7,
+      18,
+      13,
       5,
       4
     ],
     "u_rom2": [
-      8,
-      13,
+      16,
+      4,
       5,
       4
     ],
     "u_add": [
-      13,
-      11,
+      1,
+      6,
       4,
       3
     ],
     "u_xor": [
-      7,
-      9,
+      5,
+      19,
+      4,
+      3
+    ]
+  },
+  "placements_greedy_spaced": {
+    "u_rom": [
+      0,
+      0,
+      5,
+      4
+    ],
+    "u_rom2": [
+      0,
+      8,
+      5,
+      4
+    ],
+    "u_add": [
+      0,
+      16,
+      4,
+      3
+    ],
+    "u_xor": [
+      8,
+      16,
+      4,
+      3
+    ]
+  },
+  "placements_thermal_ppo": {
+    "u_rom": [
+      5,
+      13,
+      5,
+      4
+    ],
+    "u_rom2": [
+      14,
+      5,
+      5,
+      4
+    ],
+    "u_add": [
+      14,
+      13,
+      4,
+      3
+    ],
+    "u_xor": [
+      6,
+      6,
       4,
       3
     ]

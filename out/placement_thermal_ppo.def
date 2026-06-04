@@ -6,10 +6,10 @@ UNITS DISTANCE MICRONS 100 ;
 DIEAREA ( 0 0 ) ( 120000 120000 ) ;
 
 COMPONENTS 4 ;
-  - u_rom simple_rom + PLACED ( 35000 40000 ) N ;
-  - u_rom2 simple_rom + PLACED ( 65000 55000 ) N ;
-  - u_add simple_alu + PLACED ( 55000 35000 ) N ;
-  - u_xor simple_alu + PLACED ( 45000 65000 ) N ;
+  - u_rom simple_rom + PLACED ( 65000 70000 ) N ;
+  - u_rom2 simple_rom + PLACED ( 25000 25000 ) N ;
+  - u_add simple_alu + PLACED ( 65000 30000 ) N ;
+  - u_xor simple_alu + PLACED ( 30000 70000 ) N ;
 END COMPONENTS
 
 NETS 2 ;

@@ -1,11 +1,9 @@
 VERSION 5.8 ;
 NAMESCASESENSITIVE ON ;
-
 UNITS
   DATABASE MICRONS 100 ;
 END UNITS
-
-MANUFACTURINGGRID 1 ;
+MANUFACTURINGGRID 0.01 ;
 
 SITE CORE
   CLASS CORE ;
@@ -15,22 +13,41 @@ END CORE
 LAYER M1
   TYPE ROUTING ;
   DIRECTION HORIZONTAL ;
-  PITCH 100 ;
-  WIDTH 100 ;
+  PITCH 0.20 ;
+  WIDTH 0.10 ;
 END M1
 
 MACRO simple_rom
   CLASS BLOCK ;
-  FOREIGN simple_rom 0.000 0.000 ;
-  ORIGIN 0.000 0.000 ;
-  SIZE 40.000 BY 40.000 ;
+  ORIGIN 0 0 ;
+  SIZE 200.000 BY 250.000 ;
+  SYMMETRY X Y ;
+  SITE CORE ;
+
+  PIN clk
+    DIRECTION INPUT ;
+    USE SIGNAL ;
+    PORT
+      LAYER M1 ;
+        RECT 0.000 20.000 1.000 21.000 ;
+    END
+  END clk
+
+  PIN rst_n
+    DIRECTION INPUT ;
+    USE SIGNAL ;
+    PORT
+      LAYER M1 ;
+        RECT 0.000 40.000 1.000 41.000 ;
+    END
+  END rst_n
 
   PIN addr
     DIRECTION INPUT ;
     USE SIGNAL ;
     PORT
       LAYER M1 ;
-      RECT 0.000 8.000 1.000 9.000 ;
+        RECT 0.000 80.000 1.000 81.000 ;
     END
   END addr
 
@@ -39,23 +56,25 @@ MACRO simple_rom
     USE SIGNAL ;
     PORT
       LAYER M1 ;
-      RECT 39.000 8.000 40.000 9.000 ;
+        RECT 199.000 125.000 200.000 126.000 ;
     END
   END data
+
 END simple_rom
 
 MACRO simple_alu
   CLASS BLOCK ;
-  FOREIGN simple_alu 0.000 0.000 ;
-  ORIGIN 0.000 0.000 ;
-  SIZE 40.000 BY 40.000 ;
+  ORIGIN 0 0 ;
+  SIZE 150.000 BY 200.000 ;
+  SYMMETRY X Y ;
+  SITE CORE ;
 
   PIN a
     DIRECTION INPUT ;
     USE SIGNAL ;
     PORT
       LAYER M1 ;
-      RECT 0.000 8.000 1.000 9.000 ;
+        RECT 0.000 50.000 1.000 51.000 ;
     END
   END a
 
@@ -64,7 +83,7 @@ MACRO simple_alu
     USE SIGNAL ;
     PORT
       LAYER M1 ;
-      RECT 39.000 8.000 40.000 9.000 ;
+        RECT 0.000 100.000 1.000 101.000 ;
     END
   END b
 
@@ -73,7 +92,7 @@ MACRO simple_alu
     USE SIGNAL ;
     PORT
       LAYER M1 ;
-      RECT 8.000 0.000 9.000 1.000 ;
+        RECT 0.000 150.000 1.000 151.000 ;
     END
   END op
 
@@ -82,9 +101,10 @@ MACRO simple_alu
     USE SIGNAL ;
     PORT
       LAYER M1 ;
-      RECT 8.000 39.000 9.000 40.000 ;
+        RECT 149.000 100.000 150.000 101.000 ;
     END
   END y
+
 END simple_alu
 
 END LIBRARY
